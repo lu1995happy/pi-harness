@@ -1,0 +1,36 @@
+{
+  "name": "personal-pi-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Global Pi coordinator with Herdr crews and native Git maps",
+  "bin": {
+    "pi-harness": "./scripts/harness.mjs"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "doctor": "node scripts/harness.mjs doctor"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dependencies": {
+    "@ff-labs/pi-fff": "0.10.6",
+    "@juicesharp/rpiv-ask-user-question": "2.9.0",
+    "@narumitw/pi-chrome-devtools": "0.53.1",
+    "@sinclair/typebox": "0.34.41",
+    "@toon-format/toon": "4.1.1",
+    "lavish-axi": "0.1.64"
+  },
+  "optionalDependencies": {
+    "@oven/bun-windows-x64": "1.4.2"
+  }
+}

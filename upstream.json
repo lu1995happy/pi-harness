@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "primaryPlatform": "macos",
+  "components": [
+    {
+      "name": "firstmate",
+      "url": "https://github.com/kunchenguid/firstmate",
+      "revision": "86ff1bf5e67bdb3eef82b1abb9f5838b8558f7c8",
+      "local": "components/firstmate",
+      "mode": "selected source and architecture",
+      "changes": "Separate session and calm; own event store and leases replace distribution shell infrastructure."
+    },
+    {
+      "name": "rpiv-todo",
+      "url": "https://github.com/juicesharp/rpiv-mono",
+      "revision": "338b264c1ca4fd8828cc849b632f4f7ad88d2e78",
+      "local": "extensions/todo.ts",
+      "mode": "transition-rule adaptation",
+      "changes": "Crew-only persistent tool instead of full overlay."
+    },
+    {
+      "name": "pi-interactive-subagents",
+      "url": "https://github.com/amosblomqvist/pi-interactive-subagents",
+      "revision": "c3e8b53c0754ae5ccc19fdab5a7481ec039bc2f7",
+      "local": "src/crew.mjs",
+      "mode": "design reuse",
+      "changes": "ask_question coordinator escalation via map events and Herdr; no upstream transport copied."
+    },
+    {
+      "name": "pi-cc-extensions",
+      "url": "https://github.com/minuque/pi-cc-extensions",
+      "revision": "5d7a2666f51da9f450bd019af10200c88cc1df98",
+      "local": "components/tool-display",
+      "mode": "selected source",
+      "changes": "Tool grouping and render helpers only; own name limits and native click handler."
+    },
+    {
+      "name": "show-me",
+      "url": "https://github.com/humanlayer/skills",
+      "revision": "3c2629142c5d437428269b1b722b08c0b87f574d",
+      "local": "skills/show-me",
+      "mode": "selected skill plus adapter",
+      "changes": "Crew prepares visual; Firstmate opens Lavish and receives feedback through supervision."
+    },
+    {
+      "name": "ponytail",
+      "url": "https://github.com/DietrichGebert/ponytail",
+      "revision": "974d940a1c5344210874150b98ff0d2c861fab6a",
+      "local": "skills/ponytail",
+      "mode": "selected skill",
+      "changes": "Role prompt selects coding guidance; package hook omitted."
+    },
+    {
+      "name": "pi-simplify",
+      "url": "https://github.com/MattDevy/pi-extensions",
+      "revision": "86cbbbb1d65eeca88ce2f820dd958301625e394c",
+      "local": "components/simplify",
+      "mode": "selected source",
+      "changes": "Only packages/pi-simplify/src, crew-only loading."
+    },
+    {
+      "name": "matt-pocock-planning",
+      "url": "https://github.com/mattpocock/skills",
+      "revision": "3cca18b368ae95cdbdebbff572ccafa662551015",
+      "local": "skills",
+      "mode": "workflow adaptations",
+      "changes": "Grilling, domain modeling, wayfinder, to-spec, to-tickets; explicit ordinary issue links and Pi tools."
+    },
+    {
+      "name": "no-mistakes",
+      "url": "https://github.com/kunchenguid/no-mistakes",
+      "revision": "5700d0f80b17378cf51cb0cbcee275dd00318e79",
+      "local": "skills/no-mistakes",
+      "mode": "skill adapter and external CLI",
+      "changes": "Full CLI 1.64.0 too coupled to extract; skip push/pr/ci and verify local steps. Status schema reviewed at d89e633f28dec6ad92bf8bc138b6e1b3bf563061."
+    },
+    {
+      "name": "herdr-annotate",
+      "url": "https://github.com/plannotator/herdr-annotate",
+      "revision": "bccf884b874f5f39ccbef1bb6ac67625c5fb5d54",
+      "local": "Herdr plugin registry",
+      "mode": "complete plugin",
+      "changes": "All macOS terminal, document, reply and Markdown link actions wanted."
+    },
+    {
+      "name": "@juicesharp/rpiv-ask-user-question",
+      "version": "2.9.0",
+      "url": "https://www.npmjs.com/package/@juicesharp/rpiv-ask-user-question",
+      "mode": "direct dependency",
+      "reason": "Complete structured question overlay required; extraction would keep nearly all UI and validation."
+    },
+    {
+      "name": "lavish-axi",
+      "version": "0.1.64",
+      "url": "https://www.npmjs.com/package/lavish-axi",
+      "mode": "direct dependency",
+      "reason": "Full browser and feedback lifecycle required; extracting it would fork its protocol runtime."
+    },
+    {
+      "name": "@narumitw/pi-chrome-devtools",
+      "version": "0.53.1",
+      "url": "https://www.npmjs.com/package/@narumitw/pi-chrome-devtools",
+      "mode": "direct dependency",
+      "reason": "Full browser interaction and inspection toolset required."
+    },
+    {
+      "name": "@ff-labs/pi-fff",
+      "version": "0.10.6",
+      "url": "https://www.npmjs.com/package/@ff-labs/pi-fff",
+      "mode": "direct dependency",
+      "reason": "All search tools and maintained native platform packaging required."
+    },
+    {
+      "name": "pi-simple-team",
+      "url": "https://pi.dev/packages/@giladbarnea/pi-simple-team",
+      "mode": "design reuse",
+      "local": "extensions/ui.ts",
+      "changes": "Grouped team status only; no upstream code copied."
+    },
+    {
+      "name": "pi-powerline-footer",
+      "url": "https://github.com/nicobailon/pi-powerline-footer",
+      "mode": "design reuse",
+      "local": "extensions/ui.ts",
+      "changes": "Screenshot-inspired segments; no upstream code copied."
+    },
+    {
+      "name": "pi-web-ui",
+      "url": "https://github.com/Firstp1ck/pi-coding-agent-forge/tree/main/pi-package-webui",
+      "mode": "design reuse",
+      "local": "extensions/ui.ts",
+      "changes": "Prompt and output cards in Pi terminal; no browser transcript."
+    },
+    {
+      "name": "herdr-agent-state",
+      "url": "https://github.com/herdrdev/herdr",
+      "version": "0.8.2",
+      "mode": "complete bundled lifecycle integration",
+      "local": "components/herdr/agent-state.ts"
+    }
+  ]
+}

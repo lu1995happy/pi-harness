@@ -1,0 +1,100 @@
+import {test,before,after} from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {git} from '../src/process.mjs';
+import {createMap,addIssues,prepareIssue,completeIssue,reviewIssue,mergeIssue,cleanupIssue,shipMap} from '../src/maps.mjs';
+import {loadMap,saveMap,locked} from '../src/store.mjs';
+import {repositoryIdentity,mapsForRepository} from '../src/repository.mjs';
+import {dispatch,dispatchReview} from '../src/crew.mjs';
+import {crewTodo} from '../src/crew-todo.mjs';
+import {observeFleet} from '../src/fleet-health.mjs';
+import {pendingEvents} from '../src/store.mjs';
+let dir,repo;
+before(async()=>{
+  dir=await fs.mkdtemp(path.join(os.tmpdir(),'pi-harness-test-'));process.env.PI_HARNESS_HOME=path.join(dir,'harness');repo=path.join(dir,'repo');await fs.mkdir(repo);
+  await git(repo,'init','-b','main');await git(repo,'config','core.autocrlf','false');await git(repo,'config','user.email','test@example.invalid');await git(repo,'config','user.name','Harness test');
+  await fs.writeFile(path.join(repo,'base.txt'),'base\n');await git(repo,'add','.');await git(repo,'commit','-m','Initial fixture');
+});
+after(async()=>{delete process.env.PI_HARNESS_HOME;/* Keep disposable test fixture for failure diagnosis. */});
+test('reject invalid maps before branch creation',async()=>{
+  await assert.rejects(createMap({mapId:'../bad',repo,issues:[]}),/IDs/);
+  await assert.rejects(createMap({mapId:'cycle',repo,issues:[{id:'a',title:'A',dependsOn:['b']},{id:'b',title:'B',dependsOn:['a']}]}),/cycle/);
+});
+test('isolate work, enforce dependencies and separate review, retain user checkout',async()=>{
+  await createMap({mapId:'feature',repo,issues:[{id:'a',title:'A'},{id:'b',title:'B',dependsOn:['a']}]});
+  await assert.rejects(prepareIssue('feature','b'),/dependencies/);
+  const issue=await prepareIssue('feature','a');
+  await fs.writeFile(path.join(issue.worktree,'feature.txt'),'feature\n');
+  await assert.rejects(completeIssue('feature','a','done'),/Commit/);
+  await git(issue.worktree,'add','.');await git(issue.worktree,'commit','-m','Feature A');
+  const done=await completeIssue('feature','a','tests pass');
+  await assert.rejects(mergeIssue('feature','a'),/review/);
+  let map=await loadMap('feature');map.issues[0].status='reviewing';map.issues[0].reviewer={name:'independent'};await saveMap(map);
+  await assert.rejects(reviewIssue('feature','a',{reviewer:'worker',head:done.head,verdict:'pass'}),/separate/);
+  await reviewIssue('feature','a',{reviewer:'independent',head:done.head,verdict:'pass',summary:'inspected diff'});
+  await mergeIssue('feature','a');
+  assert.equal(await git(repo,'branch','--show-current'),'main');
+  await assert.rejects(fs.access(path.join(repo,'feature.txt')));
+  map=await loadMap('feature');assert.equal(await fs.readFile(path.join(map.worktree,'feature.txt'),'utf8'),'feature\n');
+  await cleanupIssue('feature','a',{close:async()=>{throw new Error('unexpected tab');}});
+  assert.equal((await loadMap('feature')).issues[0].cleaned,true);
+  const next=await prepareIssue('feature','b');assert.equal(await fs.readFile(path.join(next.worktree,'feature.txt'),'utf8'),'feature\n');
+  await assert.rejects(shipMap('feature'),/no-mistakes/);
+});
+test('map lock rejects concurrent mutations',async()=>{
+  await locked('exclusive',async()=>{await assert.rejects(locked('exclusive',async()=>{}),/locked/);});
+});
+test('repository identity follows nested directories and native worktrees',async()=>{
+  const nested=path.join(repo,"folder with spaces and 'quote");await fs.mkdir(nested);
+  const map=await loadMap('feature');
+  assert.equal(await repositoryIdentity(nested),await repositoryIdentity(map.worktree));
+  assert.deepEqual((await mapsForRepository([map,{repo:path.join(dir,'missing')}],nested)).map(m=>m.id),['feature']);
+});
+test('failed startup preserves worktree and recovers in a replacement tab without duplicate prompts',async()=>{
+  await createMap({mapId:'recover',repo,issues:[{id:'one',title:'Work'}]});
+  const calls=[];let fail=true;
+  const herdr={workspace:async cwd=>{calls.push(['workspace',cwd]);return {workspace:'w',tab:'first',pane:'p1'};},tab:async()=>{calls.push(['tab']);return {tab:'replacement',pane:'p2'};},close:async tab=>calls.push(['close',tab]),changeDirectory:async(pane,cwd)=>calls.push(['cwd',pane,cwd]),start:async()=>{if(fail){fail=false;throw new Error('startup timeout');}},prompt:async()=>calls.push(['prompt'])};
+  await assert.rejects(dispatch('recover','one','pi',herdr),/startup/);
+  let map=await loadMap('recover');assert.equal(map.issues[0].worker.tab,'first');assert.equal(map.issues[0].worker.ready,false);
+  assert.equal(calls.some(c=>c[0]==='prompt'),false);
+  await dispatch('recover','one','pi',herdr);map=await loadMap('recover');
+  assert.equal(map.issues[0].status,'working');assert.equal(map.issues[0].worker.tab,'replacement');
+  assert.equal(calls.filter(c=>c[0]==='prompt').length,1);
+  assert.ok(calls.findIndex(c=>c[0]==='tab')<calls.findIndex(c=>c[0]==='close'));
+  assert.equal(await git(map.issues[0].worktree,'branch','--show-current'),map.issues[0].branch);
+});
+test('follow-up graph, crew todo and interrupted worker health remain scoped to their map',async()=>{
+  await assert.rejects(addIssues('recover',[{id:'cycle',title:'Cycle',dependsOn:['cycle']}]),/cycle/);
+  await addIssues('recover',[{id:'followup',title:'Follow up',dependsOn:['one']}]);
+  await assert.rejects(prepareIssue('recover','followup'),/dependencies/);
+  let todos=await crewTodo('recover','one',{action:'create',subject:'Implement'});
+  todos=await crewTodo('recover','one',{action:'update',id:todos[0].id,status:'completed'});
+  await assert.rejects(crewTodo('recover','one',{action:'update',id:todos[0].id,status:'pending'}),/transition/);
+  await observeFleet('recover',{call:async()=>({agent:{agent_status:'working'}})});
+  await observeFleet('recover',{call:async()=>({agent:{agent_status:'blocked'}})});
+  await observeFleet('recover',{call:async()=>({agent:{agent_status:'blocked'}})});
+  assert.equal((await pendingEvents(['recover'])).filter(e=>e.kind==='failed').length,1);
+});
+test('cleanup creates no holder tab and waits for a real successor before removing the last crew',async()=>{
+  let map=await loadMap('recover');const issue=map.issues[0];
+  await fs.writeFile(path.join(issue.worktree,'done.txt'),'done');await git(issue.worktree,'add','.');await git(issue.worktree,'commit','-m','Recovery work');
+  const done=await completeIssue('recover','one','done');map=await loadMap('recover');map.issues[0].reviewer={name:'separate',tab:'review'};map.issues[0].status='reviewing';await saveMap(map);
+  await reviewIssue('recover','one',{reviewer:'separate',head:done.head,verdict:'pass',summary:'checked'});await mergeIssue('recover','one');
+  let fail=true;const live=[{tab_id:'replacement'},{tab_id:'review'}];const closed=[];
+  const herdr={tab:async()=>{throw new Error('No holder tabs allowed');},tabs:async()=>live,close:async tab=>{if(fail){fail=false;throw new Error('temporary failure');}closed.push(tab);live.splice(live.findIndex(t=>t.tab_id===tab),1);}};
+  const deferred=await cleanupIssue('recover','one',herdr);assert.equal(deferred.cleanupDeferred,true);assert.equal(closed.length,0);
+  await fs.access(issue.worktree);
+  live.push({tab_id:'real-successor'});
+  await assert.rejects(cleanupIssue('recover','one',herdr),/temporary/);
+  await cleanupIssue('recover','one',herdr);
+  assert.equal((await loadMap('recover')).issues[0].cleaned,true);assert.deepEqual(live,[{tab_id:'real-successor'}]);
+});
+test('review recovery creates the real replacement before closing a failed last reviewer',async()=>{
+  await createMap({mapId:'review-retry',repo,issues:[{id:'one',title:'Review'}]});
+  const map=await loadMap('review-retry');map.issues[0].status='merged';map.herdr={workspace:'w'};map.reviewer={tab:'old',name:'failed',ready:false};await saveMap(map);
+  const calls=[];const herdr={tab:async()=>{calls.push('create-review');return {tab:'new',pane:'new-pane'};},close:async tab=>calls.push('close-'+tab),start:async()=>{},prompt:async()=>{}};
+  await dispatchReview('review-retry',null,herdr);assert.deepEqual(calls,['create-review','close-old']);
+  await assert.rejects(dispatchReview('review-retry',null,herdr),/already running/);
+});
