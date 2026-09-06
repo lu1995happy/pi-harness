@@ -12,6 +12,7 @@
     "doctor": "node scripts/harness.mjs doctor"
   },
   "pi": {
+    "themes": ["./themes"],
     "extensions": [
       "./extensions/index.ts"
     ],

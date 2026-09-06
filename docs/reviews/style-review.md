@@ -1,0 +1,9 @@
+# Terminal style review
+
+The first implementation did not adequately match the supplied references. The revised presentation uses filled blue/purple panels, muted borders, cyan/purple section accents, darker fenced-code areas, and a compact inline prompt heading when it fits. Powerline segments now occupy the input's top border and include Git tracked-change/untracked counts. Crew/status groups have distinct colors.
+
+Validated in the dedicated local Pi 0.85.1 + Herdr review pane using `/harness-style-preview`, which makes no provider request. Actual Pi user/assistant and selected pi-cc grouped-tool components render synthetic fixtures. Checked full-width and 48-column panels, tool grouping and expanded output, preview navigation/exit, extension reload, and the normal editor's powerline placement. Fixed border ellipses, preserved OSC133 zone markers outside panels, and handled the terminal keyboard protocol correctly. All 18 existing functional tests passed during the change.
+
+Evidence: `.runtime/style-panels.png`, `.runtime/style-tools.png`, and `.runtime/style-preview.ansi`. PNGs reconstruct the captured pane's ANSI colors with a local font; they are not operating-system screenshots and do not prove macOS font rendering. Some symbol glyphs are missing in the reconstruction font. The original references remain under `docs/design-references/`.
+
+Still pending on the user's Mac: actual WezTerm font rendering, real pointer expansion/copy interaction, editing/completion/paste shortcuts, and end-to-end visual behavior during a model turn. Provider-backed review remains unavailable because the local account reported its usage limit. Browser copy controls, CSS transparency and rounded CSS surfaces are not implemented as terminal controls. Use the Mac checklist's terminal style section for final acceptance.

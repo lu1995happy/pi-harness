@@ -15,6 +15,7 @@ import { installTodo } from './todo.ts';
 import { installLavish } from './lavish.ts';
 import herdrState from '../components/herdr/agent-state.ts';
 import simplify from '../components/simplify/index.ts';
+import {rolePresentation} from '../src/roles.mjs';
 
 const result=(value:any)=>({content:[{type:'text',text:JSON.stringify(value,null,2)}],details:value});
 export default function(pi:any){
@@ -26,6 +27,7 @@ export default function(pi:any){
   const assignment=assignmentFile?JSON.parse(fs.readFileSync(assignmentFile,'utf8')):null;
   const role=process.env.NO_MISTAKES_GATE?'pipeline':assignment?.role||process.env.PI_HARNESS_ROLE||'main';
   const status=installUI(pi,role);
+  if(rolePresentation(role).todo)installTodo(pi,{...assignment,role});
   if(role==='main'){
     for(const name of ['grill-with-docs','wayfinder','to-spec','to-tickets','show-me'])pi.registerCommand(name,{description:`Run the ${name} workflow`,handler:async(args:string)=>{pi.sendUserMessage(`Read and apply ${path.join(sourceRoot,'skills',name,'SKILL.md')}. ${args||''}`,{deliverAs:'followUp'});}});
     questions(pi);installSupervision(pi,status);installLavish(pi);
@@ -52,7 +54,6 @@ export default function(pi:any){
     fff(pi);chrome(pi);
     if(role==='crew'){
       simplify(pi);
-      installTodo(pi,assignment);
       pi.registerTool({name:'ask_question',label:'Ask Firstmate',description:'Ask your coordinator a question and wait for its answer. It answers or escalates to the user.',parameters:Type.Object({question:Type.String()}),execute:async(_id:any,args:any)=>{
         if(!assignment)throw new Error('This session has no crew assignment');
         return result(await askCrew(assignment.mapId,assignment.issueId,args.question));

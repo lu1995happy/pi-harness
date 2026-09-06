@@ -69,7 +69,19 @@ Reload the intended Herdr session's config after installation. With the default 
 - [ ] Verify the recorded gate branch and full HEAD match the map's current HEAD. A failed, stale, absent or locally skipped check must block shipping.
 - [ ] In a disposable remote, let Firstmate ship. Expected: one exact reviewed map commit is pushed to main/master without force; no per-issue PR. A remote advancement requires renewed integration and review.
 
-## 7. Update and rollback
+## 7. Terminal style check
+
+- [ ] Follow [global appearance setup](global-appearance.md) to install the Nerd Font and load the WezTerm module. Select `firstmate` in Pi `/settings` if retaining a previous custom theme.
+- [ ] Launch plain `pi` from a different project folder, without `-e`. Confirm `/harness` works, the theme is discovered, and only the main agent shows team groups. Crew/review work sessions should expose todo instead.
+
+- [ ] Run `/harness-style-preview`. Confirm the short prompt strip, filled output panel, dark code area, purple extension-output heading, and colored powerline match the supplied references as a terminal adaptation.
+- [ ] Press Tab to inspect grouped tools and crew/status examples, then Space to expand tools. Enter/Esc must return to the normal editor. These examples are synthetic and make no model calls.
+- [ ] Run `/harness-style-preview narrow` to check 48-column wrapping. At limited widths, text and powerline segments truncate; borders must stay aligned.
+- [ ] In normal operation, verify the powerline is on the input's top border, with actual model, thinking, directory, branch, tracked-change/untracked counts and context usage. Check completion, multiline scrolling, paste, Escape and model switching.
+- [ ] Click a real tool group to expand/collapse it. Confirm the accepted Herdr click-to-copy conflict behaves as expected. The keyboard fixture does not validate mouse routing.
+- [ ] Verify the chosen WezTerm font renders Pi, branch, separator and status symbols. Browser transparency, rounded CSS corners and browser copy buttons are not reproduced by the terminal adaptation.
+
+## 8. Update and rollback
 
 - [ ] Install a second harness release, then run `node scripts/install-macos.mjs --rollback` and restart Pi. Expected: previous package loads while project work, map state and unrelated Pi settings remain.
 - [ ] Keep annotation/no-mistakes binary rollback separate, as described in upstream-maintenance.md.

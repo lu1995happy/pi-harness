@@ -1,18 +1,23 @@
 import path from 'node:path';
-import { AssistantMessageComponent, UserMessageComponent, ToolExecutionComponent } from '@earendil-works/pi-coding-agent';
-import { truncateToWidth, visibleWidth, Text } from '@earendil-works/pi-tui';
+import { AssistantMessageComponent, UserMessageComponent, ToolExecutionComponent, CustomMessageComponent, CustomEditor } from '@earendil-works/pi-coding-agent';
+import { truncateToWidth, matchesKey, Key } from '@earendil-works/pi-tui';
 import { installToolGrouping, ToolGroupComponent } from '../components/tool-display/renderer/tool/grouping.ts';
 import { setToolTuiFullscreen } from '../components/tool-display/renderer/tool/show-more-hint.ts';
 import { installCalm } from '../components/firstmate/calm.ts';
-import { maps, readJson, stateRoot } from '../src/store.mjs';
+import { maps } from '../src/store.mjs';
 import { config } from '../src/config.mjs';
 import { mapsForRepository } from '../src/repository.mjs';
 import { visualPages } from '../src/visual-pages.mjs';
+import {run} from '../src/process.mjs';
+import {ink,paint,panel,powerline,inputBottom} from '../components/firstmate/presentation.ts';
+import {rolePresentation} from '../src/roles.mjs';
 
 const PATCH=Symbol.for('personal-pi-harness:cards');
 function installCards() {
-  const registry=globalThis as any;if(registry[PATCH])return;registry[PATCH]=true;
-  for(const [Component,label] of [[UserMessageComponent,'YOUR PROMPT'],[AssistantMessageComponent,'OUTPUT']] as const){
+  const registry=globalThis as any;
+  if(registry[PATCH]?.update){registry[PATCH].update(panel);return;}
+  const state={panel,update(next:any){this.panel=next;}};registry[PATCH]=state;
+  for(const [Component,label] of [[UserMessageComponent,'LAST USER PROMPT'],[AssistantMessageComponent,''],[CustomMessageComponent,'EXTENSION OUTPUT']] as const){
     const original=Component.prototype.render;
     Component.prototype.render=function(width:number){
       if(width<16)return original.call(this,width);
@@ -20,10 +25,7 @@ function installCards() {
       if(!inner.some(line=>line.trim()))return [];
       // Thinking/tool-use messages are activity, not final response cards.
       if(Component===AssistantMessageComponent&&((this as any).lastMessage?.stopReason==='toolUse'))return inner;
-      const cyan='\x1b[38;5;110m',reset='\x1b[0m';
-      return [cyan+truncateToWidth(`╭─ ${label} ${'─'.repeat(width)}`,width-1)+'╮'+reset,
-        ...inner.map(line=>`${cyan}│${reset} ${truncateToWidth(line,width-4)}${' '.repeat(Math.max(0,width-3-visibleWidth(truncateToWidth(line,width-4))))}${cyan}│${reset}`),
-        cyan+`╰${'─'.repeat(width-2)}╯`+reset];
+      return state.panel(inner,width,label,Component===CustomMessageComponent?ink.purple:ink.cyan);
     };
   }
   // Use Pi 0.85's component-local mouse routing rather than the upstream
@@ -39,41 +41,80 @@ function installCards() {
   }
 }
 export function installUI(pi:any,role:string) {
-  let calm=config().calm,ctx:any,timer:any,supervision='starting';
+  let calm=config().calm,ctx:any,timer:any,supervision='starting',branch='no branch',changes='',renderTui:any,refreshing=false;
   installCalm(()=>calm);installCards();setToolTuiFullscreen(true);
   const grouping=installToolGrouping(()=>true);
   async function refresh(){
-    if(!ctx?.hasUI)return;
+    if(!ctx?.hasUI||refreshing)return;refreshing=true;
     try{
       const all=await mapsForRepository(await maps(),ctx.cwd);
       const rows:string[]=[];
       if(role==='main'){
-        rows.push(`◉ Supervision · ${supervision}`);
+        rows.push(paint(ink.cyan,'◉ SUPERVISION')+paint(ink.muted,`  ${supervision}`));
         for(const map of all.filter(m=>m.status==='active')){
-          rows.push(`⚑ ${map.title}`);
-          for(const issue of map.issues)rows.push(`  ${issue.status==='merged'?'✓':issue.status==='waiting'?'?':'·'} ${issue.id} · ${issue.title} · ${issue.status}${issue.kind?` · ${issue.kind}`:''}`);
+          rows.push(paint(ink.purple,`╭─ CREW · ${map.title}`));
+          for(const issue of map.issues)rows.push(paint(ink.edge,'│ ')+paint(issue.status==='merged'?ink.green:issue.status==='waiting'?ink.gold:ink.cyan,`${issue.status==='merged'?'✓':issue.status==='waiting'?'?':'·'} ${issue.id}`)+` · ${issue.title}`+paint(ink.muted,` · ${issue.status}${issue.kind?` · ${issue.kind}`:''}`));
+          rows.push(paint(ink.edge,'╰─'));
         }
         const pages=await visualPages();
-        for(const page of pages.filter((p:any)=>p.status==='waiting'&&all.some(m=>m.id===p.mapId)))rows.push(`◇ Waiting for you · ${page.title}`);
+        for(const page of pages.filter((p:any)=>p.status==='waiting'&&all.some(m=>m.id===p.mapId)))rows.push(paint(ink.gold,`◇ WAITING FOR YOU · ${page.title}`));
       }
-      ctx.ui.setWidget('harness-status',rows);
-    }catch(error:any){ctx.ui.setStatus('harness-error',error.message);}
+      if(rolePresentation(role).team)ctx.ui.setWidget('harness-status',rows);
+      const status=await run('git',['--no-optional-locks','status','--porcelain=v1','-z','--branch'],{cwd:ctx.cwd,timeout:3000,allowFailure:true});
+      if(status.code===0){
+        const entries=status.stdout.split('\0');const header=entries.shift()||'';
+        branch=header.replace(/^## (?:No commits yet on |Initial commit on )?/,'').split('...')[0];
+        let dirty=0,untracked=0;
+        for(let i=0;i<entries.length;i++){const entry=entries[i];if(!entry)continue;if(entry.startsWith('??'))untracked++;else{dirty++;if(/[RC]/.test(entry.slice(0,2)))i++;}}
+        changes=(dirty?` *${dirty}`:'')+(untracked?` ?${untracked}`:'');
+      }else{branch='no branch';changes='';}
+      renderTui?.requestRender();
+    }catch(error:any){ctx.ui.setStatus('harness-error',error.message);}finally{refreshing=false;}
   }
   pi.on('session_start',(_event:any,newCtx:any)=>{
     ctx=newCtx;if(!ctx.hasUI)return;
     ctx.ui.setHiddenThinkingLabel('');ctx.ui.setToolsExpanded(false);grouping.setTheme(ctx.ui.theme);
-    ctx.ui.setFooter((tui:any,theme:any,data:any)=>{
-      const unsubscribe=data.onBranchChange(()=>tui.requestRender());
-      return {dispose:unsubscribe,invalidate(){},render(width:number){
-        const usage=ctx.getContextUsage();const model=ctx.model?.id||'no model';
-        const segments=[theme.fg('accent','π'),theme.fg('accent',model),theme.fg('muted',`thinking:${pi.getThinkingLevel()}`),theme.fg('accent',path.basename(ctx.cwd)),theme.fg('warning',data.getGitBranch()||'no branch'),theme.fg('dim',usage?`${Math.round(usage.percent||0)}%/${Math.round((ctx.model?.contextWindow||0)/1000)}k`:'context —')];
-        return [truncateToWidth(segments.join(theme.fg('dim',' ❯ ')),width)];
-      }};
+    ctx.ui.setEditorComponent((tui:any,theme:any,keybindings:any)=>{
+      renderTui=tui;
+      // Retain Pi's application shortcuts, paste handling, completion and cursor layout.
+      const editor=new CustomEditor(tui,theme,keybindings);
+      const original=editor.renderTopBorder.bind(editor);
+      editor.renderTopBorder=(width:number,hidden:number)=>{
+        width+=2;
+        if(hidden>0||width<24)return paint(ink.cyan,'╭')+original(width-2,hidden)+paint(ink.cyan,'╮');
+        const usage=ctx.getContextUsage();
+        return powerline(width,ctx.model?.name||ctx.model?.id||'no model',pi.getThinkingLevel(),path.basename(ctx.cwd),branch,changes,usage?`${Math.round(usage.percent||0)}%/${Math.round((ctx.model?.contextWindow||0)/1000)}k`:'context —');
+      };
+      editor.renderBottomBorder=(width:number,hidden:number)=>inputBottom(width+2,hidden);
+      const render=editor.render.bind(editor),mouse=editor.handleMouse.bind(editor);
+      editor.render=(width:number)=>{
+        if(width<4)return [''];
+        const rows=render(width-2),bottom=(editor as any).renderedVisibleLineCount+1;
+        return rows.map((line:string,index:number)=>index===0||index===bottom?line:index<bottom?paint(ink.cyan,'│')+line+paint(ink.cyan,'│'):' '+line+' ');
+      };
+      editor.handleMouse=(event:any)=>mouse({...event,x:Math.max(0,event.x-1),width:Math.max(1,event.width-2)});
+      return editor;
     });
+    ctx.ui.setFooter(()=>({invalidate(){},render(){return [];}}));
     if(timer)clearInterval(timer);timer=setInterval(()=>void refresh(),1500);timer.unref();void refresh();
   });
   pi.registerCommand('calm',{description:'Toggle middle activity visibility; keep prompt and final output.',handler:async()=>{calm=!calm;ctx.ui.notify(`Calm ${calm?'on':'off'}`,'info');}});
-  pi.registerCommand('crew-status',{description:'Refresh supervision, map groups and waiting visual questions.',handler:refresh});
+  if(rolePresentation(role).team)pi.registerCommand('crew-status',{description:'Refresh supervision, map groups and waiting visual questions.',handler:refresh});
+  pi.registerCommand('harness-style-preview',{description:'Preview terminal styling with synthetic content; no model call.',handler:async(_args:any,c:any)=>{
+    if(c.mode!=='tui')return;
+    await c.ui.custom((tui:any,_theme:any,_keys:any,done:any)=>{
+      let page=0;
+      const group=new ToolGroupComponent({groups:new Set(),theme:_theme,active:false} as any);
+      for(const [toolName,args,result] of [['bash',{command:'sleep 2 && echo done'},undefined],['read',{path:'README.md'},{isError:false}],['read',{path:'missing.ts'},{isError:true}],['read',{path:'package.json'},{isError:false}]] as any[]){group.addTool({toolName,args,result,executionStarted:true,render:(w:number)=>[truncateToWidth(`${toolName}: ${Object.values(args).join(' ')}`,w),truncateToWidth('  Synthetic tool output for expansion preview.',w)]});}
+      const prompt=new UserMessageComponent('Review the map and show me the result.');
+      const reply=new AssistantMessageComponent({role:'assistant',content:[{type:'text',text:'The map is ready for **final review**.\n\n- Crew changes merged\n- Independent review passed\n\n```sh\ngit diff main...HEAD --stat\n```'}],stopReason:'stop'} as any);
+      return {invalidate(){prompt.invalidate();reply.invalidate();},handleInput(key:string){if(matchesKey(key,Key.escape)||matchesKey(key,Key.enter))done(undefined);else if(matchesKey(key,Key.tab)){page=1-page;tui.requestRender();}else if(matchesKey(key,Key.space)){group.setExpanded(!group.expanded);tui.requestRender();}},render(available:number){
+        const width=_args.trim()==='narrow'?Math.min(48,available):available;
+        const content=page===0?[...prompt.render(width),...reply.render(width),...panel(['Review report saved. No publication has run.'],width,'EXTENSION OUTPUT',ink.purple)]:[...group.render(width),'',paint(ink.cyan,'◉ SUPERVISION')+paint(ink.muted,'  watching · 3 crews'),paint(ink.purple,'╭─ CREW · Account settings'),paint(ink.cyan,'│ ▸ #12 · Profile form · working · Pi'),paint(ink.gold,'│ ? #13 · Avatar upload · waiting · Claude Code'),paint(ink.green,'│ ✓ #14 · Tests · merged · Codex'),paint(ink.edge,'╰─'),paint(ink.gold,'◇ WAITING FOR YOU · Choose the settings layout'),''];
+        return [truncateToWidth(paint(ink.muted,'STYLE PREVIEW · synthetic · Tab: panels/tools · Space: expand · Enter/Esc: close'),width),...content,powerline(width,'Opus 4.5','high','pi-mono','main',' *10 ?2','0.0%/200k')];
+      }};
+    });
+  }});
   pi.on('session_shutdown',()=>{if(timer)clearInterval(timer);grouping.shutdown();});
   return (value:string)=>{supervision=value;void refresh();};
 }

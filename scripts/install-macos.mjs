@@ -8,7 +8,7 @@ import {run} from '../src/process.mjs';
 import {atomic,readJson} from '../src/store.mjs';
 
 const source=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const files=['components','extensions','src','skills','scripts','docs','tests','package.json','package-lock.json','PROGRESS.md','README.md','upstream.json'];
+const files=['components','extensions','src','skills','scripts','docs','tests','themes','config','package.json','package-lock.json','PROGRESS.md','README.md','upstream.json'];
 const digests={arm64:'8c0717e6c61b29c48d72aa4e6965ea305b2bd53a9a22bd0082ae2f1dad94e139',x64:'1315c7955962a7fa8b51e22b2592e99f89fa85816433a1162dc68839d195ce52'};
 
 export function activationSettings(settings,release,previous){
@@ -45,8 +45,10 @@ async function main(){
     if(!installation.previous)throw new Error('No previous release recorded');
     await fs.access(path.join(installation.previous,'extensions','index.ts'));
     await atomic(`${settingsFile}.backup-${Date.now()}`,settings);
-    await atomic(settingsFile,activationSettings(settings,installation.previous,installation.current));
-    await atomic(installationFile,{...installation,current:installation.previous,previous:installation.current});
+    const restored=activationSettings(settings,installation.previous,installation.current);
+    if(installation.previousTheme)restored.theme=installation.previousTheme;
+    await atomic(settingsFile,restored);
+    await atomic(installationFile,{...installation,current:installation.previous,previous:installation.current,previousTheme:settings.theme||'dark'});
     console.log('Restored '+installation.previous+'. Restart Pi sessions; runtime state is preserved.');return;
   }
   for(const executable of ['node','npm','git','pi','herdr'])await run(executable,['--version']);
@@ -71,8 +73,8 @@ async function main(){
   }
   const latestSettings=await readJson(settingsFile,{});
   await atomic(`${settingsFile}.backup-${Date.now()}`,latestSettings);
-  await atomic(settingsFile,activationSettings(latestSettings,release,installation.current));
-  await atomic(installationFile,{current:release,previous:installation.current||null,installedAt:new Date().toISOString()});
+  await atomic(settingsFile,{...activationSettings(latestSettings,release,installation.current),theme:latestSettings.theme||'firstmate'});
+  await atomic(installationFile,{current:release,previous:installation.current||null,previousTheme:latestSettings.theme||'dark',installedAt:new Date().toISOString()});
   console.log(`Installed ${release}\nRestart Pi in an existing project. Run herdr server reload-config in its session.\nApplication verification: node ${path.join(release,'scripts','doctor-macos.mjs')}`);
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{console.error(error.message);process.exitCode=1;});

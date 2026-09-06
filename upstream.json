@@ -122,14 +122,15 @@
       "url": "https://github.com/nicobailon/pi-powerline-footer",
       "mode": "design reuse",
       "local": "extensions/ui.ts",
-      "changes": "Screenshot-inspired segments; no upstream code copied."
+      "inspectedRevision": "1e95b918689dc6b87bc98d3341c6da6fd59fb57c",
+      "changes": "Screenshot-inspired colored segments integrated into Pi CustomEditor top border with Git counts; inspected editor composition/colors, no upstream code copied. Owned helpers in components/firstmate/presentation.ts."
     },
     {
       "name": "pi-web-ui",
       "url": "https://github.com/Firstp1ck/pi-coding-agent-forge/tree/main/pi-package-webui",
       "mode": "design reuse",
       "local": "extensions/ui.ts",
-      "changes": "Prompt and output cards in Pi terminal; no browser transcript."
+      "changes": "Filled prompt/output/extension panels, muted borders, colored accents and dark code surfaces in Pi terminal; no browser transcript or browser copy buttons. Owned helpers in components/firstmate/presentation.ts."
     },
     {
       "name": "herdr-agent-state",
