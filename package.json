@@ -12,7 +12,9 @@
     "doctor": "node scripts/harness.mjs doctor"
   },
   "pi": {
-    "themes": ["./themes"],
+    "themes": [
+      "./themes"
+    ],
     "extensions": [
       "./extensions/index.ts"
     ],
@@ -27,6 +29,7 @@
     "@ff-labs/pi-fff": "0.10.6",
     "@juicesharp/rpiv-ask-user-question": "2.9.0",
     "@narumitw/pi-chrome-devtools": "0.53.1",
+    "@resvg/resvg-js": "2.6.2",
     "@sinclair/typebox": "0.34.41",
     "@toon-format/toon": "4.1.1",
     "lavish-axi": "0.1.64"

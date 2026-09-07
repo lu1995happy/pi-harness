@@ -18,7 +18,7 @@ import {
 	TOOL_GROUPING_PATCH_KEY as PATCH_KEY,
 } from "../../utils/patch-keys.ts";
 
-const NON_GROUPABLE = new Set(["edit", "write", "apply_patch"]);
+const NON_GROUPABLE = new Set<string>();
 
 type Patch = {
 	owner: object;
@@ -287,6 +287,15 @@ export class ToolGroupComponent extends Container {
 	}
 
 	render(width: number): string[] {
+		if (!this._expanded) {
+			const tools=this.children as any[];
+			const edited=tools.some(tool=>['edit','write','apply_patch'].includes(toolName(tool)));
+			const ran=tools.some(tool=>toolName(tool)==='bash');
+			const label=[edited?'Edited files':'',ran?'Ran commands':'',!edited&&!ran?'Used tools':''].filter(Boolean).join(', ');
+			const running=tools.filter(tool=>status(tool)==='pending').length;
+			const failed=tools.filter(tool=>status(tool)==='error').length;
+			return ['',truncateToWidth(` ${label} › ${tools.length} calls${running?` · ${running} running`:''}${failed?` · ${failed} failed`:''} · ${showMoreHintText()}`,width),''];
+		}
 		const cached = this.settledCacheHit(width);
 		if (cached) return cached;
 		const theme = this.patch.theme;
@@ -312,7 +321,7 @@ export class ToolGroupComponent extends Container {
 		const overallColor = overall === "pending" ? "accent" : overall;
 		const nameList = names.size > 1 ? ` ${fg("dim", `• ${toolNameList(this.children)}`)}` : "";
 		// 圆点保持 dim；hover 只高亮可点击文字。
-		const hint = `${fg("dim", "•")} ${fg(this.hintHovered ? "text" : "dim", showMoreHintText())}`;
+		const hint = `${fg("dim", "•")} ${fg(this.hintHovered ? "text" : "dim", this._expanded?showMoreHintText().replace('more','less'):showMoreHintText())}`;
 		const lines = [
 			"",
 			truncateToWidth(
@@ -392,7 +401,7 @@ function ungroup(patch: Patch): void {
 }
 
 function normalizeGroup(patch: Patch, group: ToolGroupComponent): void {
-	if (group.children.length > 1) return;
+	if (group.children.length > 0) return;
 	const parent = (group as any)[PARENT_KEY];
 	const index = parent?.children?.indexOf(group) ?? -1;
 	const tools = group.releaseTools();
@@ -422,13 +431,18 @@ function maybeGroup(patch: Patch, parent: any, component: any): void {
 	if (!Array.isArray(children)) return;
 	const index = children.indexOf(component);
 	const prior = previousSibling(children, index - 1);
-	if (!prior) return;
-	if (prior.child instanceof ToolGroupComponent && (prior.child as any).patch === patch) {
+	if (prior?.child instanceof ToolGroupComponent && (prior.child as any).patch === patch) {
 		children.splice(index, 1);
 		prior.child.addTool(component);
 		return;
 	}
-	if (!isGroupable(prior.child) || prior.child[GENERATION_KEY] !== patch.generation) return;
+	if (!prior || !isGroupable(prior.child) || prior.child[GENERATION_KEY] !== patch.generation) {
+		const group=new ToolGroupComponent(patch);
+		group.addTool(component);
+		(group as any)[PARENT_KEY]=parent;
+		children[index]=group;
+		return;
+	}
 	const group = new ToolGroupComponent(patch);
 	group.addTool(prior.child);
 	group.addTool(component);

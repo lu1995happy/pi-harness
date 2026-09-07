@@ -16,10 +16,12 @@ import { installLavish } from './lavish.ts';
 import herdrState from '../components/herdr/agent-state.ts';
 import simplify from '../components/simplify/index.ts';
 import {rolePresentation} from '../src/roles.mjs';
+import {installImages} from './images.ts';
 
 const result=(value:any)=>({content:[{type:'text',text:JSON.stringify(value,null,2)}],details:value});
 export default function(pi:any){
   herdrState(pi);
+  installImages(pi);
   pi.registerFlag('harness-assignment',{description:'Owned crew assignment file',type:'string'});
   const flag=pi.getFlag('harness-assignment') as string|undefined;
   const argvIndex=process.argv.indexOf('--harness-assignment');
@@ -48,7 +50,7 @@ export default function(pi:any){
           case 'answer':return result(await answerCrew(args.mapId,args.issueId,args.answer));
         }
       }});
-    pi.on('session_start',()=>{pi.setActiveTools(['read','grep','find','ls','fm_map','fm_ack','ask_user_question','fm_visual']);});
+    pi.on('session_start',()=>{pi.setActiveTools(['read','grep','find','ls','fm_map','fm_ack','ask_user_question','fm_visual','fm_image']);});
     pi.on('before_agent_start',(event:any)=>({systemPrompt:event.systemPrompt+`\nYou are Firstmate, the coordinator of this user's global Pi + Herdr harness. Never implement, debug, or perform substantive reviews yourself: dispatch crews. Use fm_map to create/execute maps and advance independent review, merge and cleanup steps. Worker questions are yours to answer using existing decisions; only escalate genuine missing user decisions. Simple non-UI questions use ask_user_question. Complex or UI questions use Show-me + fm_visual (Lavish). Calm preserves user prompt and final reply. Never use todo. After all issues merge, dispatch final no-mistakes review; only green reviewed code may ship. Map spec is {mapId,repo,title,issues:[{id,title,body,acceptance,dependsOn}],base?}; map membership uses this explicit issue list, not GitHub sub-issues. Source root: ${sourceRoot}.` }));
   }else{
     fff(pi);chrome(pi);

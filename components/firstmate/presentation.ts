@@ -21,17 +21,20 @@ export function panel(lines:string[],width:number,label='',accent=ink.cyan){
   if(compact)body[0]=paint(ink.cyan,label)+'  '+trimmed;
   else if(label)body.unshift(paint(accent,label));
   let code=false;
-  const edge=(text:string,color=ink.edge)=>fill+color+text+ink.reset;
-  const rendered=[edge('╭',accent)+edge('─'.repeat(width-2)+'╮'),
+  // Only the left rail carries the message accent. Thin cap glyphs retain
+  // the terminal background; painting their whole cells leaks past the outline.
+  const edge=(text:string,color=ink.edge,background='')=>ink.reset+background+color+text+ink.reset;
+  const cap=(left:string,right:string)=>edge(left)+edge('─'.repeat(width-2))+edge(right);
+  const rendered=[cap('╭','╮'),
     ...body.map(line=>{
       const fence=/^\s*(```|~~~)/.test(line.replace(/\x1b\[[\d;]*m/g,''));
       const background=code||fence?'\x1b[48;2;24;28;43m':fill;
       if(fence)code=!code;
-      return edge('│',accent)+surface(' '+line,width-2,background)+edge('│');
+      return edge('▎',accent,background)+surface(' '+line,width-2,background)+edge('│',ink.edge,background);
     }),
-    edge('╰',accent)+edge('─'.repeat(width-2)+'╯')];
+    cap('╰','╯')];
   rendered[0]=start+rendered[0];rendered[rendered.length-1]+=end;
-  return rendered;
+  return [ink.reset,...rendered,ink.reset];
 }
 export function powerline(width:number,model:string,thinking:string,project:string,branch:string,changes:string,usage:string){
   // Selected palette/icon values from pi-powerline-footer's public design;

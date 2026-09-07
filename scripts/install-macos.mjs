@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash,randomUUID} from 'node:crypto';
 import {run} from '../src/process.mjs';
 import {atomic,readJson} from '../src/store.mjs';
+import {installGraphics} from './enable-herdr-graphics.mjs';
 
 const source=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const files=['components','extensions','src','skills','scripts','docs','tests','themes','config','package.json','package-lock.json','PROGRESS.md','README.md','upstream.json'];
@@ -14,7 +15,7 @@ const digests={arm64:'8c0717e6c61b29c48d72aa4e6965ea305b2bd53a9a22bd0082ae2f1dad
 export function activationSettings(settings,release,previous){
   const packages=(settings.packages||[]).filter(item=>(typeof item==='string'?item:item.source)!==previous);
   if(!packages.some(item=>(typeof item==='string'?item:item.source)===release))packages.push(release);
-  return {...settings,packages,tuiMode:'fullscreen'};
+  return {...settings,packages,tuiMode:'regular'};
 }
 async function installGate(home){
   const digest=digests[process.arch];if(!digest)throw new Error('Unsupported macOS architecture');
@@ -67,6 +68,7 @@ async function main(){
   const configuration=await readJson(path.join(home,'config.json'),{});
   await atomic(path.join(home,'config.json'),{...configuration,calm:configuration.calm??true,executables:{...configuration.executables,'no-mistakes':gate}});
   await run('node',[path.join(release,'scripts','install-annotate-macos.mjs')],{timeout:300000});
+  await installGraphics();
   for(const kind of ['claude','codex']){
     const available=await run(kind,['--version'],{allowFailure:true}).catch(()=>null);
     if(available?.code===0)await run('herdr',['integration','install',kind]);

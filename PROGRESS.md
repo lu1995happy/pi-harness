@@ -91,6 +91,42 @@ macOS is the primary target for every package/extension following the user's cor
 
 ## Border correction from supplied screenshots
 
+## Regular-mode output implementation — 2026-09-06
+
+Follow-up correction: replaced the bottom last-prompt widget with a noncapturing row-1 overlay using Pi's regular-screen overlay API. Added actual SGR mouse press/release routing to group headers using the last completed component layout and viewport offset. Verified in a fresh dedicated Herdr workspace (w3:p1): captured prompt at row 1; click at row 19 expanded, second click collapsed; after 45 filler lines, click at row 26 expanded the intended group and the prompt stayed on row 1. Inspected `.runtime/interaction-expanded.png`, reconstructed from actual viewport ANSI colors. Mouse input was sent through Herdr's terminal input path, not by directly toggling the group. Expanded label now says “click to show less.” Regular mode and the existing global activation are retained. Native history selection/scrolling may need the terminal's mouse-bypass modifier. These checks supersede the earlier bottom-widget/keyboard-only acceptance claims.
+
+- User explicitly requires normal screen. Changed global activation and macOS installer defaults to `tuiMode: regular`, and activated that setting on this host. Removed the forced fullscreen mouse hint. Existing sessions require restart for this change.
+- Adapted the last-prompt design into a widget beside the live editor, restoring the latest user text from session history and updating on input/message completion. This works in regular mode. It is not a screen-pinned overlay during native terminal scrollback; the terminal owns that viewport.
+- Changed selected tool grouping to compact activity summaries, including edit/write tools and single calls. Details remain expandable. Assistant commentary remains visible while calm suppresses thinking, so groups stay separated by commentary.
+- Assistant replies now use unfilled text with a muted side accent. User/extension cards use different cyan/purple borders, background only inside, and explicit unfilled message breaks. Cursor shares the lower end-cap row; long-input overflow indication is retained.
+- Added `fm_image` and `/harness-image <local path>` using Pi's native inline Image component with bounded thumbnail dimensions. Supports PNG/JPEG/GIF/WebP up to 10 MiB; stores a presentation-only session entry, not model image context. Native capability fallback applies.
+- Validated global regular-mode startup, collapsed/expanded fixtures, input return, and local image-entry execution in the dedicated Pi + Herdr session. The text capture cannot verify image pixels. Nineteen functional tests pass. Mac image fidelity, native scrollback, and multiline input still need visual acceptance.
+- Source reuse is behavioral/design reuse of the documented sticky prompt and compact display concepts; the fullscreen sticky implementation is not installed. Existing pi-cc grouping remains the selected-source foundation.
+
+Follow-up on 2026-09-06: user correctly identified remaining cursor placement, background outside borders, missing message breaks and indistinct border colors. Catalog research completed before further redesign; see `docs/reviews/output-package-research.md`. Found `pi-sticky-last-prompt` for a terminal sticky prompt and `pi-compact-display` for expandable turn summaries. No packages installed or renderer changes made during that research pass. Prior border checks did not establish a complete visual match.
+
 - Joined the input's top-right corner and added matching side borders and short bottom end caps, replacing Pi's unrelated full-width bottom rule. The native editor still owns text wrapping, cursor markers, completion and scrolling; mouse coordinates account for the added left edge.
 - Continued existing panel fill through border cells to remove black gutters around message content. Section headings now sit inside the panel instead of interrupting its top border; the left accent continues through both corners.
 - Reloaded and inspected the actual dedicated Pi + Herdr pane, including the existing conversation and a 48-column fixture. ANSI reconstruction: `.runtime/border-review.png`. No terminal font or window-background configuration was changed in this correction.
+
+## Mouse regression correction (2026-09-06)
+
+The previous always-on SGR adapter broke normal terminal interaction: it consumed wheel/non-left events, outside-header clicks, and dialog mouse input. The earlier injected-header test was insufficient to validate native mouse behavior.
+
+Regular mode now starts with reporting disabled and does not consume any input. `/harness-mouse` explicitly enables temporary tool-click capture. Escape, the first wheel report, terminal stop, extension disposal, or input to a capturing dialog releases capture. Subsequent wheel ticks scroll normally; the first tick used to exit capture is not replayed. The click hint appears only while capture is enabled; otherwise the truthful Ctrl+O hint is shown. No fullscreen requirement. The top prompt overlay is retained.
+
+Validation: all 23 tests passed, including four mouse regression cases for default pass-through, matching/batched clicks, wheel/Escape/dialog release, and lifecycle cleanup. Fresh global Pi in dedicated Herdr workspace w4 loaded successfully. Injected press/release at the measured header row expanded the fixture; an injected wheel report returned the hint to Ctrl+O. Inspected `.runtime/mouse-regression.png`, reconstructed from that live ANSI viewport. These checks verify protocol handling and the rendered UI, not physical mouse selection/clipboard behavior or macOS rendering. Existing sessions need `/reload` or a restart to clear the old capture modes.
+
+## Restore transcript cards; remove fixed prompt overlay (2026-09-06)
+
+User screenshot showed the overlay baked into native scrollback, interrupting reply text. Removed the overlay entirely; prompts remain cyan conversation cards. Restored filled, fully bordered assistant cards (pink), while extension cards stay purple. Unfilled breaks separate cards. No new mouse capture changes.
+
+Verified in fresh ordinary global Pi + Herdr workspace w5 with `/harness-cards-check`: inspected `.runtime/cards-restored.png`, reconstructed from live ANSI, showing all three colored boxes. Added 45 rows using the interaction fixture and asserted no LAST USER PROMPT remained in the live viewport. The prompt now scrolls with content; floating/sticky behavior is intentionally unsupported in normal terminal scrollback. Restart Pi to replace the previously patched renderer; `/reload` alone cannot replace its old prototype closure. Old terminal scrollback may retain previously drawn artifacts.
+
+## Reference mismatch acknowledged (2026-09-06)
+
+The supplied reference has a strong left accent and faint rounded outline, not equally bright colored rectangular borders. Updated panel renderer to use a left rail and subdued remaining edges. This is a terminal-cell approximation, not visual parity with the browser. A local ANSI preview exposed cap background leaking outside the thin outline; removed that cap fill after inspection. Final cap adjustment is not yet rechecked in live Herdr.
+
+Outstanding accepted requirements remain: scroll-aware sticky prompt in regular mode and default click-to-expand without breaking mouse behavior. The previous fallback to transcript-only prompts and opt-in `/harness-mouse` does not complete these requirements. Click is currently available only after `/harness-mouse`; Ctrl+O remains the default.
+
+Inspected installed Herdr 0.8.2 schema: includes pane.scroll_changed, pane.graphics.info/set/clear and viewport placement. Official socket API documents experimental viewport graphics, which may allow a host-owned overlay rather than corrupting PTY scrollback. Not yet proven compatible with this host or Mac. Capability probe could not connect to the dedicated review socket; no host graphics changes made. Do not mark sticky/click acceptance complete or claim impossible solely from the failed Pi overlay approach.

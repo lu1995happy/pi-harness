@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { AssistantMessageComponent, UserMessageComponent, ToolExecutionComponent, CustomMessageComponent, CustomEditor } from '@earendil-works/pi-coding-agent';
-import { truncateToWidth, matchesKey, Key } from '@earendil-works/pi-tui';
+import { truncateToWidth, matchesKey, Key, Text } from '@earendil-works/pi-tui';
 import { installToolGrouping, ToolGroupComponent } from '../components/tool-display/renderer/tool/grouping.ts';
 import { setToolTuiFullscreen } from '../components/tool-display/renderer/tool/show-more-hint.ts';
 import { installCalm } from '../components/firstmate/calm.ts';
@@ -11,6 +11,7 @@ import { visualPages } from '../src/visual-pages.mjs';
 import {run} from '../src/process.mjs';
 import {ink,paint,panel,powerline,inputBottom} from '../components/firstmate/presentation.ts';
 import {rolePresentation} from '../src/roles.mjs';
+import {installRegularInteraction} from '../components/firstmate/regular-interaction.ts';
 
 const PATCH=Symbol.for('personal-pi-harness:cards');
 function installCards() {
@@ -23,9 +24,7 @@ function installCards() {
       if(width<16)return original.call(this,width);
       const inner=original.call(this,Math.max(1,width-4));
       if(!inner.some(line=>line.trim()))return [];
-      // Thinking/tool-use messages are activity, not final response cards.
-      if(Component===AssistantMessageComponent&&((this as any).lastMessage?.stopReason==='toolUse'))return inner;
-      return state.panel(inner,width,label,Component===CustomMessageComponent?ink.purple:ink.cyan);
+      return state.panel(inner,width,label,Component===CustomMessageComponent?ink.purple:Component===AssistantMessageComponent?ink.pink:ink.cyan);
     };
   }
   // Use Pi 0.85's component-local mouse routing rather than the upstream
@@ -42,7 +41,8 @@ function installCards() {
 }
 export function installUI(pi:any,role:string) {
   let calm=config().calm,ctx:any,timer:any,supervision='starting',branch='no branch',changes='',renderTui:any,refreshing=false;
-  installCalm(()=>calm);installCards();setToolTuiFullscreen(true);
+  let interaction:any;
+  installCalm(()=>calm);installCards();setToolTuiFullscreen(false);
   const grouping=installToolGrouping(()=>true);
   async function refresh(){
     if(!ctx?.hasUI||refreshing)return;refreshing=true;
@@ -73,9 +73,11 @@ export function installUI(pi:any,role:string) {
   }
   pi.on('session_start',(_event:any,newCtx:any)=>{
     ctx=newCtx;if(!ctx.hasUI)return;
+    ctx.ui.setWidget('harness-last-prompt',undefined);
     ctx.ui.setHiddenThinkingLabel('');ctx.ui.setToolsExpanded(false);grouping.setTheme(ctx.ui.theme);
     ctx.ui.setEditorComponent((tui:any,theme:any,keybindings:any)=>{
       renderTui=tui;
+      interaction?.dispose();interaction=installRegularInteraction(tui,(message:string)=>ctx.ui.setStatus('harness-sticky',message||undefined));
       // Retain Pi's application shortcuts, paste handling, completion and cursor layout.
       const editor=new CustomEditor(tui,theme,keybindings);
       const original=editor.renderTopBorder.bind(editor);
@@ -85,21 +87,43 @@ export function installUI(pi:any,role:string) {
         const usage=ctx.getContextUsage();
         return powerline(width,ctx.model?.name||ctx.model?.id||'no model',pi.getThinkingLevel(),path.basename(ctx.cwd),branch,changes,usage?`${Math.round(usage.percent||0)}%/${Math.round((ctx.model?.contextWindow||0)/1000)}k`:'context —');
       };
-      editor.renderBottomBorder=(width:number,hidden:number)=>inputBottom(width+2,hidden);
+      let moreBelow=0;
+      editor.renderBottomBorder=(width:number,hidden:number)=>{moreBelow=hidden;return inputBottom(width+2,hidden);};
       const render=editor.render.bind(editor),mouse=editor.handleMouse.bind(editor);
       editor.render=(width:number)=>{
         if(width<4)return [''];
         const rows=render(width-2),bottom=(editor as any).renderedVisibleLineCount+1;
-        return rows.map((line:string,index:number)=>index===0||index===bottom?line:index<bottom?paint(ink.cyan,'│')+line+paint(ink.cyan,'│'):' '+line+' ');
+        return rows.flatMap((line:string,index:number)=>index===bottom?(moreBelow?[line]:[]):index===0?[line]:index<bottom?[paint(ink.cyan,index===bottom-1?'╰':'│')+line+paint(ink.cyan,index===bottom-1?'╯':'│')]:[' '+line+' ']);
       };
-      editor.handleMouse=(event:any)=>mouse({...event,x:Math.max(0,event.x-1),width:Math.max(1,event.width-2)});
+      editor.handleMouse=(event:any)=>mouse({...event,x:Math.max(0,event.x-1),y:!moreBelow&&event.y>(editor as any).renderedVisibleLineCount?event.y+1:event.y,width:Math.max(1,event.width-2)});
       return editor;
     });
     ctx.ui.setFooter(()=>({invalidate(){},render(){return [];}}));
     if(timer)clearInterval(timer);timer=setInterval(()=>void refresh(),1500);timer.unref();void refresh();
   });
   pi.registerCommand('calm',{description:'Toggle middle activity visibility; keep prompt and final output.',handler:async()=>{calm=!calm;ctx.ui.notify(`Calm ${calm?'on':'off'}`,'info');}});
+  pi.registerCommand('harness-mouse',{description:'Toggle temporary tool-click capture; Escape or the wheel restores native mouse behavior.',handler:async()=>{
+    const enabled=interaction?.toggleMouse();
+    ctx?.ui.notify(enabled?'Tool clicks enabled. Escape or wheel releases mouse capture.':'Native terminal mouse behavior restored.','info');
+  }});
   if(rolePresentation(role).team)pi.registerCommand('crew-status',{description:'Refresh supervision, map groups and waiting visual questions.',handler:refresh});
+  pi.registerEntryRenderer('harness-interaction-fixture',(_entry:any,_options:any,theme:any)=>{
+    const group=new ToolGroupComponent({groups:new Set(),theme,active:false} as any);
+    group.addTool({toolName:'bash',args:{command:'echo interaction-check'},result:{isError:false},render:()=>['echo interaction-check','INTERACTION CHECK DETAILS VISIBLE']});
+    return group;
+  });
+  pi.registerEntryRenderer('harness-scroll-fixture',()=>new Text(Array.from({length:45},(_,i)=>`Synthetic scroll fixture ${i+1}`).join('\n'),0,0));
+  pi.registerEntryRenderer('harness-cards-fixture',()=>{
+    const prompt=new UserMessageComponent('Review the map and show me the result.');
+    const reply=new AssistantMessageComponent({role:'assistant',content:[{type:'text',text:'The map is ready for **review**.\n\n- Crew changes merged\n- Independent review passed'}],stopReason:'stop'} as any);
+    return {mouseLayout:undefined as any,invalidate(){prompt.invalidate();reply.invalidate();},render(width:number){const p=prompt.render(width),r=reply.render(width);this.mouseLayout={width,children:[{component:prompt,height:p.length},{component:reply,height:r.length}]};return [...p,...r,...panel(['Review report saved.'],width,'EXTENSION OUTPUT',ink.purple)];}};
+  });
+  pi.registerCommand('harness-cards-check',{description:'Render synthetic prompt, reply, and extension cards in normal scrollback.',handler:async()=>{pi.appendEntry('harness-cards-fixture',{});}});
+  pi.registerCommand('harness-interaction-check',{description:'Render a synthetic tool activity fixture without calling a model.',handler:async(args:string)=>{
+
+    if(args.trim()==='long')pi.appendEntry('harness-scroll-fixture',{});
+    pi.appendEntry('harness-interaction-fixture',{});
+  }});
   pi.registerCommand('harness-style-preview',{description:'Preview terminal styling with synthetic content; no model call.',handler:async(_args:any,c:any)=>{
     if(c.mode!=='tui')return;
     await c.ui.custom((tui:any,_theme:any,_keys:any,done:any)=>{
@@ -115,6 +139,6 @@ export function installUI(pi:any,role:string) {
       }};
     });
   }});
-  pi.on('session_shutdown',()=>{if(timer)clearInterval(timer);grouping.shutdown();});
+  pi.on('session_shutdown',()=>{if(timer)clearInterval(timer);interaction?.dispose();grouping.shutdown();});
   return (value:string)=>{supervision=value;void refresh();};
 }

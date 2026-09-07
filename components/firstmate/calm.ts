@@ -11,8 +11,7 @@ export function installCalm(enabled:()=>boolean) {
   const original=prototype.updateContent;
   const patch={enabled};registry[KEY]=patch;
   prototype.updateContent=function(message:any,isStreaming?:boolean){
-    const mid=message.stopReason==='toolUse'||message.stopReason==='length'&&message.content.some((b:any)=>b.type==='toolCall');
-    const shown=patch.enabled()?{...message,content:message.content.filter((b:any)=>b.type!=='thinking'&&!(mid&&b.type==='text'))}:message;
+    const shown=patch.enabled()?{...message,content:message.content.filter((b:any)=>b.type!=='thinking')}:message;
     original.call(this,shown,isStreaming);
     if(shown!==message)this.lastMessage=message;
   };

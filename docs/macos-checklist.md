@@ -71,6 +71,8 @@ Reload the intended Herdr session's config after installation. With the default 
 
 ## 7. Terminal style check
 
+The latest regular-mode implementation supersedes the earlier fullscreen/pointer checks below. Use [regular output acceptance](regular-output.md), including native scrollback and image-protocol validation. Regular mode uses keyboard expansion; the live prompt bar does not remain pinned while scrolling native terminal history.
+
 - [ ] Follow [global appearance setup](global-appearance.md) to install the Nerd Font and load the WezTerm module. Select `firstmate` in Pi `/settings` if retaining a previous custom theme.
 - [ ] Launch plain `pi` from a different project folder, without `-e`. Confirm `/harness` works, the theme is discovered, and only the main agent shows team groups. Crew/review work sessions should expose todo instead.
 
@@ -87,3 +89,14 @@ Reload the intended Herdr session's config after installation. With the default 
 - [ ] Keep annotation/no-mistakes binary rollback separate, as described in upstream-maintenance.md.
 
 Attach `.runtime/macos-validation/report.json` and concise failing-step observations when reporting problems. Keep authentication files and credentials out of reports.
+
+### Mouse regression acceptance
+
+- After `/reload`, wheel-scroll native history and drag-select text without holding Shift. Verify Herdr's usual tab/workspace and copy interactions.
+- `/harness-mouse` opts into temporary tool clicks; click a header to expand/collapse. Escape returns to native mouse mode.
+- In temporary capture, the first wheel tick releases capture and later ticks scroll. Verify no mouse escape text appears in the editor.
+- Open a question dialog and confirm keyboard input is retained. Restart/reload and verify capture stays off.
+
+### Transcript cards supersede the sticky-prompt checks above
+
+Restart Pi, then run `/harness-cards-check`. Confirm cyan prompt, pink reply, purple extension boxes, interior-only fill and clear gaps. Scroll normally: the prompt card must scroll away with the transcript, with no fixed copy across reply text. Sticky overlays are no longer used in regular mode.
